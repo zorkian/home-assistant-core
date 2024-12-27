@@ -9,6 +9,7 @@ from solark_cloud import AuthenticationError, SolArkCloud
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_SCAN_INTERVAL, CONF_USERNAME
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
@@ -46,31 +47,49 @@ class SolArkCloudCoordinator(DataUpdateCoordinator):
         # Initialise your api here
         self.api = SolArkCloud()
 
+    async def _async_setup(self):
+        """Set up the coordinator.
+
+        This is the place to set up your coordinator,
+        or to load data, that only needs to be loaded once.
+
+        This method will be called automatically during
+        coordinator.async_config_entry_first_refresh.
+        """
+        try:
+            await self._async_update()
+        except AuthenticationError as e:
+            raise ConfigEntryAuthFailed(e) from e
+        except Exception as e:
+            raise ConfigEntryError(f"Error communicating with API: {e}") from e
+
+    async def _async_update(self):
+        """Fetch data from the API endpoint to refresh."""
+        if not self.api.access_token or self.api.expires_at < time.time():
+            await self.hass.async_add_executor_job(
+                self.api.login, self.username, self.password
+            )
+        plants_response = await self.hass.async_add_executor_job(self.api.plants)
+        plants = plants_response.plants
+        flows = {}
+        for plant_id in plants:
+            flows[plant_id] = await self.hass.async_add_executor_job(
+                self.api.flow, plant_id
+            )
+        self.data = {"plants": plants, "flows": flows}
+
     async def async_update_data(self):
         """Fetch data from API endpoint.
 
         This is the place to pre-process the data to lookup tables
         so entities can quickly look up their data.
         """
-        plants, flows = None, None
         try:
-            if not self.api.access_token or self.api.expires_at < time.time():
-                await self.hass.async_add_executor_job(
-                    self.api.login, self.username, self.password
-                )
-            plants_response = await self.hass.async_add_executor_job(self.api.plants)
-            plants = plants_response.plants
-            flows = {}
-            for plant_id in plants:
-                flows[plant_id] = await self.hass.async_add_executor_job(
-                    self.api.flow, plant_id
-                )
+            await self._async_update()
         except AuthenticationError as e:
-            _LOGGER.error(e)
             raise UpdateFailed(e) from e
         except Exception as e:
             # This will show entities as unavailable by raising UpdateFailed exception
-            _LOGGER.error(e)
             raise UpdateFailed(f"Error communicating with API: {e}") from e
 
         # What is returned here is stored in self.data by the DataUpdateCoordinator

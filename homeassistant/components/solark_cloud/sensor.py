@@ -11,7 +11,6 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -27,13 +26,65 @@ _LOGGER = logging.getLogger(__name__)
 class SolArkCloudSensorEntityDescription(SensorEntityDescription):
     """Sensor entity description for SolarEdge."""
 
+    invert_key: str | None = None
+
+    # min_power: int = 0
+    # pv_to: bool = False
+    # to_load: bool = False
+    # to_grid: bool = False
+    # to_battery: bool = False
+    # battery_to: bool = False
+    # grid_to: bool = False
+    # generator_to: bool = False
+    # min_to: bool = False
+    # exists_generator: bool = False
+    # exists_min: bool = False
+    # generator_on: bool = False
+    # micro_on: bool = False
+    # exists_meter: bool = False
+    # bms_comm_fault_flag: bool = False
+    # exist_think_power: bool = False
+
 
 SENSOR_TYPES = [
     SolArkCloudSensorEntityDescription(
         key="soc",
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=PERCENTAGE,
+        device_class=SensorDeviceClass.BATTERY,
+        native_unit_of_measurement="%",
     ),
+    SolArkCloudSensorEntityDescription(
+        key="battery_power",
+        invert_key="battery_to",
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement="W",
+    ),
+    SolArkCloudSensorEntityDescription(
+        key="grid_or_meter_power",
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement="W",
+    ),
+    SolArkCloudSensorEntityDescription(
+        key="load_or_eps_power",
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement="W",
+    ),
+    SolArkCloudSensorEntityDescription(
+        key="pv_power",
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement="W",
+    ),
+    SolArkCloudSensorEntityDescription(
+        key="generator_power",
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement="W",
+    ),
+    # SolArkCloudSensorEntityDescription(key="battery_to", state_class=SensorStateClass.)
 ]
 
 
@@ -54,7 +105,15 @@ async def async_setup_entry(
     sensors = []
     for plant in coordinator.data["plants"].values():
         sensors.extend(
-            [PlantSensor(coordinator, plant, sensor) for sensor in SENSOR_TYPES]
+            [
+                PlantSensor(
+                    coordinator,
+                    plant,
+                    coordinator.data["flows"].get(plant["id"]),
+                    sensor,
+                )
+                for sensor in SENSOR_TYPES
+            ]
         )
 
     # Create the sensors.
@@ -68,19 +127,20 @@ class PlantSensor(CoordinatorEntity, SensorEntity):
         self,
         coordinator: SolArkCloudCoordinator,
         plant: dict,
+        flow: dict,
         sensor: SolArkCloudSensorEntityDescription,
     ) -> None:
         """Initialise sensor."""
         super().__init__(coordinator)
         self.plant = plant
-        self.flow = None
+        self.flow = flow
         self.sensor = sensor
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Update sensor with latest data from coordinator."""
         # This method is called by your DataUpdateCoordinator when a successful update runs.
-        self.flow = self.coordinator.data["flows"].get_flow(self.plant["id"])
+        self.flow = self.coordinator.data["flows"][self.plant["id"]]
         self.async_write_ha_state()
 
     @property
@@ -115,7 +175,9 @@ class PlantSensor(CoordinatorEntity, SensorEntity):
         """Return the state of the entity."""
         # Using native value and native unit of measurement, allows you to change units
         # in Lovelace and HA will automatically calculate the correct value.
-        return getattr(self.flow, self.sensor.key)
+        invert = self.sensor.invert_key and getattr(self.flow, self.sensor.invert_key)
+        value = getattr(self.flow, self.sensor.key)
+        return value if not invert else -value
 
     @property
     def native_unit_of_measurement(self) -> str | None:
