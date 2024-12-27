@@ -563,6 +563,7 @@ FLOWS = {
         "snapcast",
         "snooz",
         "solaredge",
+        "solark_cloud",
         "solarlog",
         "solax",
         "soma",

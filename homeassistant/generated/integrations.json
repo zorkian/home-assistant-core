@@ -5833,6 +5833,12 @@
         }
       }
     },
+    "solark_cloud": {
+      "name": "Sol-Ark Cloud",
+      "integration_type": "hub",
+      "config_flow": true,
+      "iot_class": "cloud_polling"
+    },
     "solarlog": {
       "name": "Solar-Log",
       "integration_type": "hub",

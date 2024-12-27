@@ -1396,6 +1396,8 @@ build.json @home-assistant/supervisor
 /homeassistant/components/solaredge/ @frenck @bdraco
 /tests/components/solaredge/ @frenck @bdraco
 /homeassistant/components/solaredge_local/ @drobtravels @scheric
+/homeassistant/components/solark_cloud/ @zorkian
+/tests/components/solark_cloud/ @zorkian
 /homeassistant/components/solarlog/ @Ernst79 @dontinelli
 /tests/components/solarlog/ @Ernst79 @dontinelli
 /homeassistant/components/solax/ @squishykid
